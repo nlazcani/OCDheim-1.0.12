@@ -236,6 +236,7 @@ namespace OCDheim
             if (prefab.GetComponent<TOverlayVisualizer>() != null) { return; }
 
             prefab.AddComponent<TOverlayVisualizer>();
+            global::OCDheim.Logger.Debug(() => $"Attached {typeof(TOverlayVisualizer).Name} to vanilla prefab '{prefabName}'");
         }
     }
 }

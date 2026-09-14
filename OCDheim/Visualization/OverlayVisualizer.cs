@@ -6,6 +6,27 @@ using static OCDheim.PieceHelpers;
 
 namespace OCDheim
 {
+    // Drives the placement ghost's overlay every gameplay frame. See OverlayVisualizer.Tick for why the ghost's
+    // own Update cannot be relied on.
+    [HarmonyPatch]
+    public static class OverlayVisualizerTicker
+    {
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(Player))]
+        [HarmonyPatch(nameof(Player.UpdatePlacementGhost))]
+        private static void TickOverlayVisualizer(Player __instance)
+        {
+            var ghost = __instance == null ? null : __instance.m_placementGhost;
+            if (ghost == null) { return; }
+
+            var visualizer = ghost.GetComponent<OverlayVisualizer>();
+            if (visualizer != null && visualizer.isActiveAndEnabled)
+            {
+                visualizer.Tick();
+            }
+        }
+    }
+
     // Helper classes for OverlayVisualizerImpls, intended to abstract away unnecessary low level complexity.
     public abstract class OverlayVisualizer : MonoBehaviour
     {
@@ -28,6 +49,13 @@ namespace OCDheim
         private void Awake()
         {
             var primaryTransform = transform.Find("_GhostOnly");
+            if (primaryTransform == null)
+            {
+                Logger.Warn(() => $"'{name}' has no _GhostOnly child, {GetType().Name} stays disabled");
+                enabled = false;
+                return;
+            }
+
             var secondaryTransform = Instantiate(primaryTransform, transform);
             var tertiaryTransform = Instantiate(secondaryTransform, transform);
 
@@ -47,7 +75,14 @@ namespace OCDheim
 
         private void InitializeCameras()
         {
-            mainCamera = Camera.main ?? throw new InvalidOperationException();
+            mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                Logger.Warn(() => $"No main camera, {GetType().Name} overlays stay invisible");
+                enabled = false;
+                return;
+            }
+
             overlayCameraGo = new GameObject();
             overlayCameraGo.transform.SetParent(mainCamera.transform, false);
             overlayCamera = overlayCameraGo.AddComponent<Camera>();
@@ -71,8 +106,20 @@ namespace OCDheim
             }
         }
 
-        private void Update()
+        private int lastTickedFrame = -1;
+
+        private void Update() => Tick();
+
+        // The placement ghost's own Update does not tick during normal gameplay - the overlays only moved when
+        // the pause menu was opened or closed, which froze the height readout and made the scroll wheel look
+        // dead. Player.UpdatePlacementGhost does run every gameplay frame, so it drives the refresh instead.
+        // Both entry points are kept and guarded so a frame is never processed twice, which would double every
+        // scroll step.
+        public void Tick()
         {
+            if (lastTickedFrame == Time.frameCount) { return; }
+            lastTickedFrame = Time.frameCount;
+
             if (KeyBinder.gridModFreshlyEnabled)
             {
                 OnEnableGrid();

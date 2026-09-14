@@ -10,6 +10,12 @@
   over the wire as just "Remove"
 - Fix: Grid Mode terraforming applies again. It used to be signalled by stamping a sentinel radius onto
   `TerrainOp.Settings`, which no longer survives the round trip now that only the prefab hash is sent
+- Fix: `ALT` toggles Grid Mode once per press. `ZInput` reports a single press across several frames under
+  Valheim's new Input System, so Grid Mode turned on and straight back off and every feature behind it - the
+  grid overlay, the height readout, the scroll wheel - looked dead
+- Fix: The Grid Mode overlays refresh while you play. The placement ghost's own `Update` only ran on pause-menu
+  transitions, so the height readout froze and `MOUSE WHEEL` appeared to do nothing until you opened and closed
+  the menu; `Player.UpdatePlacementGhost` drives the refresh now
 - Fix: A rejected asset bundle no longer takes the whole plugin down - everything except the World Grid overlay keeps working
 - Fix: A renamed or removed vanilla prefab now only disables its own tool instead of every tool registered after it
 

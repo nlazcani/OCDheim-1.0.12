@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 using static OCDheim.PlayerHelpers;
 
@@ -24,6 +25,8 @@ namespace OCDheim
         public void Refresh()
         {
             var scrollΔ = KeyBinder.ScrollΔ();
+            if (scrollΔ == 0) { return; }
+
             if (scrollΔ > 0) {
                 Up(scrollΔ);
             }
@@ -61,12 +64,39 @@ namespace OCDheim
     [HarmonyPatch]
     public static class BlockCameraZoom
     {
+        private static bool readingOurOwnScroll;
+
+        // The spinner used to read the wheel straight off UnityEngine.Input.GetAxis("Mouse ScrollWheel").
+        // Valheim now drives ZInput through Unity's new Input System, and the legacy Input Manager is no longer
+        // fed - GetAxis just answers a silent 0, so scrolling did nothing and threw nothing. Read the wheel
+        // through ZInput like the game itself does, stepping around our own camera-zoom block on the way in.
+        public static float ReadScrollWheel()
+        {
+            readingOurOwnScroll = true;
+            try
+            {
+                var fromZInput = ZInput.GetMouseScrollWheel();
+                if (fromZInput != 0f) { return fromZInput; }
+
+                // ZInput derives an "input source" from the mouse-delta action and returns a flat 0 whenever
+                // ShouldAcceptInputFromSource turns it down, so the wheel can read as motionless while it is
+                // plainly turning. The mouse device itself is not gated - ask it directly.
+                var mouse = Mouse.current;
+
+                return mouse == null ? 0f : mouse.scroll.ReadValue().y;
+            }
+            finally
+            {
+                readingOurOwnScroll = false;
+            }
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(ZInput))]
         [HarmonyPatch(nameof(ZInput.GetMouseScrollWheel))]
         public static bool Prefix(ref float __result)
         {
-            if (player.HasRaiseGroundTerraformToolEquipped())
+            if (!readingOurOwnScroll && player.HasRaiseGroundTerraformToolEquipped())
             {
                 __result = 0f;
                 return false;
