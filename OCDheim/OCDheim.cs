@@ -131,24 +131,27 @@ namespace OCDheim
         {
             //AddToolPiece<UndoModificationsOverlayVisualizer>("Undo Terrain Modification", "mud_road_v2", "Hoe", OverlayVisualizer.undo);
             //AddToolPiece<RedoModificationsOverlayVisualizer>("Redo Terrain Modification", "mud_road_v2", "Hoe", OverlayVisualizer.redo);
-            AddToolPiece<RemoveModificationsOverlayVisualizer>("Remove Terrain Modifications", "mud_road_v2", "Hoe", OverlayVisualizer.remove);
+            // The prefab name must not contain a space. Valheim hashes prefabs through Utils.GetPrefabName,
+            // which truncates at the first '(' or ' ', so "Remove Terrain Modifications(Clone)" went over the
+            // wire as plain "Remove" and never matched anything ObjectDB knew about.
+            AddToolPiece<RemoveModificationsOverlayVisualizer>("ocdheim_remove_terrain_modifications", "Remove Terrain Modifications", "mud_road_v2", "Hoe", OverlayVisualizer.remove);
         }
 
-        private void AddToolPiece<TOverlayVisualizer>(string pieceName, string basePieceName, string pieceTable, Texture2D iconTexture, bool level = false, bool raise = false, bool smooth = false, bool paint = false) where TOverlayVisualizer: OverlayVisualizer
+        private void AddToolPiece<TOverlayVisualizer>(string prefabName, string displayName, string basePieceName, string pieceTable, Texture2D iconTexture, bool level = false, bool raise = false, bool smooth = false, bool paint = false) where TOverlayVisualizer: OverlayVisualizer
         {
-            var pieceExists = PieceManager.Instance.GetPiece(pieceName);
+            var pieceExists = PieceManager.Instance.GetPiece(prefabName);
             if (pieceExists != null) { return; }
 
             if (PrefabManager.Instance.GetPrefab(basePieceName) == null)
             {
-                global::OCDheim.Logger.Warn(() => $"Vanilla prefab '{basePieceName}' is gone, skipping tool piece '{pieceName}'");
+                global::OCDheim.Logger.Warn(() => $"Vanilla prefab '{basePieceName}' is gone, skipping tool piece '{displayName}'");
                 return;
             }
 
             var pieceIcon = Sprite.Create(iconTexture, new Rect(0, 0, iconTexture.width, iconTexture.height), Vector2.zero);
-            var piece = new CustomPiece(pieceName, basePieceName, new PieceConfig
+            var piece = new CustomPiece(prefabName, basePieceName, new PieceConfig
             {
-                Name = pieceName,
+                Name = displayName,
                 Icon = pieceIcon,
                 PieceTable = pieceTable
             });
@@ -156,7 +159,7 @@ namespace OCDheim
             var terrainOp = piece.PiecePrefab.GetComponent<TerrainOp>();
             if (terrainOp == null)
             {
-                global::OCDheim.Logger.Warn(() => $"Prefab '{basePieceName}' carries no TerrainOp, skipping tool piece '{pieceName}'");
+                global::OCDheim.Logger.Warn(() => $"Prefab '{basePieceName}' carries no TerrainOp, skipping tool piece '{displayName}'");
                 return;
             }
 
@@ -168,6 +171,7 @@ namespace OCDheim
             piece.PiecePrefab.AddComponent<TOverlayVisualizer>();
 
             PieceManager.Instance.AddPiece(piece);
+            TerrainOpRegistrar.Register(piece.PiecePrefab);
         }
 
         private void AddOCDheimBuildPieces()

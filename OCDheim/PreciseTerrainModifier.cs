@@ -101,11 +101,11 @@ namespace OCDheim
 
         public static void RecolorTerrain(Vector3 worldPos, PaintType paintType, Heightmap hMap, ref Color[] paintMask, ref bool[] modifiedPaint, bool removeColor = false)
         {
-            Logger.Info(() => "[INIT] Color Terrain Modification");
+            Logger.Debug(() => "[INIT] Color Terrain Modification");
 
             var tileColor = ResolveColor(paintType);
             PositionRelativeTo(hMap.transform.position, worldPos, out var xPos, out var yPos);
-            Logger.Info(() => $"worldPos: {worldPos}, chunkPos: {hMap.transform.position}, relPos: ({xPos}, {yPos})");
+            Logger.Debug(() => $"worldPos: {worldPos}, chunkPos: {hMap.transform.position}, relPos: ({xPos}, {yPos})");
 
             FindExtremums(xPos, out var xMin, out var xMax);
             FindExtremums(yPos, out var yMin, out var yMax);
@@ -117,7 +117,7 @@ namespace OCDheim
                 }
             }
 
-            Logger.Info(() => "[SUCCESS] Color Terrain Modification");
+            Logger.Debug(() => "[SUCCESS] Color Terrain Modification");
         }
 
         private static void RemoveTerrainModifications(Vector3 worldPos, Heightmap hMap, ref float[] levelΔ, ref float[] smoothΔ, ref bool[] modifiedHeight)
@@ -187,7 +187,7 @@ namespace OCDheim
             var tileIndex = y * PTilesPerChunk + x;
             paintMask[tileIndex] = tileColor;
             modifiedPaint[tileIndex] = !removeColor;
-            Logger.Info(() => $"tilePos: ({x}, {y}), tileIndex: {tileIndex}, tileColor: {tileColor}");
+            Logger.Debug(() => $"tilePos: ({x}, {y}), tileIndex: {tileIndex}, tileColor: {tileColor}");
         }
     }
 
@@ -199,7 +199,7 @@ namespace OCDheim
         [HarmonyPatch(nameof(TerrainComp.SmoothTerrain))]
         private static bool Prefix(Vector3 worldPos, float radius, bool square, float power, TerrainComp __instance, Heightmap ___m_hmap, ref float[] ___m_smoothDelta, ref bool[] ___m_modifiedHeight)
         {
-            if (ClientSideGridModeOverride.IsGridModeEnabled(radius))
+            if (ClientSideGridModeOverride.IsGridModeEnabled())
             {
                 PreciseTerrainModifier.SmoothenTerrain(worldPos, ___m_hmap, __instance, ref ___m_smoothDelta, ref ___m_modifiedHeight);
                 return false;
@@ -215,15 +215,23 @@ namespace OCDheim
         [HarmonyPrefix]
         [HarmonyPatch(typeof(TerrainComp))]
         [HarmonyPatch(nameof(TerrainComp.RaiseTerrain))]
-        private static bool Prefix(Vector3 worldPos, float radius, float delta, bool square, float power, TerrainComp __instance, Heightmap ___m_hmap, ref float[] ___m_levelDelta, ref float[] ___m_smoothDelta, ref bool[] ___m_modifiedHeight)
+        private static bool Prefix(Vector3 worldPos, float radius, ref float delta, bool square, float power, TerrainComp __instance, Heightmap ___m_hmap, ref float[] ___m_levelDelta, ref float[] ___m_smoothDelta, ref bool[] ___m_modifiedHeight)
         {
-            if (ClientSideGridModeOverride.IsGridModeEnabled(radius))
+            if (!ClientSideGridModeOverride.IsGridModeEnabled())
             {
-                PreciseTerrainModifier.RaiseTerrain(worldPos, ___m_hmap, __instance, delta, ref ___m_levelDelta, ref ___m_smoothDelta, ref ___m_modifiedHeight);
-                return false;
+                return true;
             }
 
-            return true;
+            // Lowering keeps the vanilla area and only takes its step size from the spinner - the old
+            // sentinel-radius version never flagged a negative delta for the precise path either.
+            if (delta < 0)
+            {
+                delta = LowerGroundSpinner.value;
+                return true;
+            }
+
+            PreciseTerrainModifier.RaiseTerrain(worldPos, ___m_hmap, __instance, RaiseGroundSpinner.value, ref ___m_levelDelta, ref ___m_smoothDelta, ref ___m_modifiedHeight);
+            return false;
         }
     }
 
@@ -238,7 +246,7 @@ namespace OCDheim
         // The radius and the paint type come out of the settings instead, the grid-mode signal rides along unchanged.
         private static bool Prefix(Vector3 worldPos, TerrainOp.Settings settings, Heightmap ___m_hmap, ref Color[] ___m_paintMask, ref bool[] ___m_modifiedPaint)
         {
-            if (ClientSideGridModeOverride.IsGridModeEnabled(settings.m_paintRadius))
+            if (ClientSideGridModeOverride.IsGridModeEnabled())
             {
                 PreciseTerrainModifier.RecolorTerrain(worldPos, settings.m_paintType, ___m_hmap, ref ___m_paintMask, ref ___m_modifiedPaint);
                 return false;
@@ -248,43 +256,21 @@ namespace OCDheim
         }
     }
 
-    // DIRTY HACK: bend the flow to our will with a hijacked "unused" variable. Thus is the life of the modder ;)
-    [HarmonyPatch]
+    // This used to smuggle Grid Mode through TerrainOp.Settings by stamping a sentinel float.NegativeInfinity
+    // onto the radius that nothing else read, and the terrain patches downstream recognised the mod's own
+    // operations by that impossible radius. Valheim 1.0.12 ended that: ApplyOperation transmits only the
+    // prefab's name hash and the receiver reads the settings straight back out of ObjectDB, so a doctored
+    // radius - and the spinner's raise delta with it - never survived the round trip. The sentinel silently
+    // stopped arriving and Grid Mode terraforming quietly reverted to vanilla behaviour.
+    //
+    // The operation now runs on whoever owns the terrain, so ask the key binder on the spot instead. In
+    // single player that is the player who swung the hoe; in multiplayer, terrain you do not own is
+    // terraformed by its owner, whose own Grid Mode setting then applies.
     public static class ClientSideGridModeOverride
     {
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(TerrainComp))]
-        [HarmonyPatch(nameof(TerrainComp.ApplyOperation))]
-        private static bool Prefix(TerrainOp modifier)
+        public static bool IsGridModeEnabled()
         {
-            if (KeyBinder.gridModeEnabled)
-            {
-                if (modifier.m_settings.m_smooth)
-                {
-                    modifier.m_settings.m_smoothRadius = float.NegativeInfinity;
-                }
-                if (modifier.m_settings.m_raise && modifier.m_settings.m_raiseDelta >= 0)
-                {
-                    modifier.m_settings.m_raiseRadius = float.NegativeInfinity;
-                    modifier.m_settings.m_raiseDelta = RaiseGroundSpinner.value;
-                }
-                if (modifier.m_settings.m_raise && modifier.m_settings.m_raiseDelta < 0)
-                {
-                    modifier.m_settings.m_raiseDelta = LowerGroundSpinner.value;
-                }
-                if (modifier.m_settings.m_paintCleared)
-                {
-                    modifier.m_settings.m_paintRadius = float.NegativeInfinity;
-                }
-            }
-
-            return true;
-        }
-
-        // DIRTY HACK: This is surely how I will be remembered ;)
-        public static bool IsGridModeEnabled(float radius)
-        {
-            return float.IsNegativeInfinity(radius);
+            return KeyBinder.gridModeEnabled;
         }
     }
 }

@@ -4,11 +4,18 @@
 
 ### Fixes
 - Fix: Compatibility with Valheim 1.0.12 on Unity 6
+- Fix: The Hoe's "Remove Terrain Modifications" works again. Valheim now transmits only a TerrainOp prefab's
+  name hash and resolves the settings through `ObjectDB`, so the piece has to be registered there - and its
+  prefab had to be renamed, because `Utils.GetPrefabName` truncates at the first space and the old name went
+  over the wire as just "Remove"
+- Fix: Grid Mode terraforming applies again. It used to be signalled by stamping a sentinel radius onto
+  `TerrainOp.Settings`, which no longer survives the round trip now that only the prefab hash is sent
 - Fix: A rejected asset bundle no longer takes the whole plugin down - everything except the World Grid overlay keeps working
 - Fix: A renamed or removed vanilla prefab now only disables its own tool instead of every tool registered after it
 
 ### Improvements
 - Minor: Log level is configurable and defaults to `Info`; `Debug` used to be hardwired on and cost frames while building
+- Minor: Per-tile paint logging moved from `Info` to `Debug`, matching every other terrain operation
 - Minor: Jotunn dependency raised to 2.30.0
 
 ## Version 0.2.3
