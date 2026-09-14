@@ -8,6 +8,7 @@ using Jotunn.Utils;
 using OCDheim.Utilities;
 using System.IO;
 using UnityEngine;
+using Log = OCDheim.Logger;
 
 namespace OCDheim
 {
@@ -19,15 +20,11 @@ namespace OCDheim
     {
         public const string GUID = "dymek.dev.OCDheim";
         private const string Name = "OCDheim";
-        private const string Version = "0.2.4";
+        private const string Version = "0.3.0";
 
         private static bool resourceBundleLoadAttempted;
         private static AssetBundle resourceBundleBacking;
 
-        // The shader/material bundle is built by the Unity editor against an older engine than the one
-        // Valheim currently ships (Unity 6). A bundle the running engine refuses to read must not take
-        // the whole plugin down with it: every OCDheim feature except the World Grid overlay works fine
-        // without it, so resolve it lazily and hand back null on failure.
         public static AssetBundle resourceBundle
         {
             get
@@ -41,12 +38,12 @@ namespace OCDheim
                 }
                 catch (Exception e)
                 {
-                    global::OCDheim.Logger.Warn(() => $"Could not load the OCDheim asset bundle, the World Grid overlay stays disabled: {e.Message}");
+                    Log.Warn(() => $"Could not load the OCDheim asset bundle, the World Grid overlay stays disabled: {e.Message}");
                 }
 
                 if (resourceBundleBacking == null)
                 {
-                    global::OCDheim.Logger.Warn(() => "OCDheim asset bundle is unavailable, the World Grid overlay stays disabled.");
+                    Log.Warn(() => "OCDheim asset bundle is unavailable, the World Grid overlay stays disabled.");
                 }
 
                 return resourceBundleBacking;
@@ -90,8 +87,8 @@ namespace OCDheim
 
         private void Awake()
         {
-            global::OCDheim.Logger.logLevel = Config.Bind("Logging", "LogLevel", BepInEx.Logging.LogLevel.Info,
-                "How chatty OCDheim is. Debug logs every piece the placement ghost evaluates and costs frames while building.").Value;
+            Log.logLevel = Config.Bind("Logging", "LogLevel", BepInEx.Logging.LogLevel.Info,
+                "Debug logs every piece the placement ghost evaluates and costs frames while building.").Value;
 
             PatchEachFeatureSeparately();
             gameObject.AddComponent<KeyBinder>();
@@ -100,9 +97,6 @@ namespace OCDheim
             PrefabManager.OnVanillaPrefabsAvailable += ModVanillaValheimTools;
         }
 
-        // Harmony.PatchAll() gives up on the first patch class that will not apply, so one vanilla method whose
-        // signature moved used to leave the entire mod unpatched. Patching class by class keeps the damage local:
-        // the feature whose hook no longer fits goes quiet, everything else still works.
         private void PatchEachFeatureSeparately()
         {
             foreach (var type in AccessTools.GetTypesFromAssembly(typeof(OCDheim).Assembly))
@@ -113,7 +107,7 @@ namespace OCDheim
                 }
                 catch (Exception e)
                 {
-                    global::OCDheim.Logger.Warn(() => $"Could not apply the patches of '{type.Name}', that feature stays disabled: {e.Message}");
+                    Log.Warn(() => $"Could not apply the patches of '{type.Name}', that feature stays disabled: {e.Message}");
                 }
             }
         }
@@ -129,11 +123,6 @@ namespace OCDheim
 
         private void AddOCDheimToolPieces()
         {
-            //AddToolPiece<UndoModificationsOverlayVisualizer>("Undo Terrain Modification", "mud_road_v2", "Hoe", OverlayVisualizer.undo);
-            //AddToolPiece<RedoModificationsOverlayVisualizer>("Redo Terrain Modification", "mud_road_v2", "Hoe", OverlayVisualizer.redo);
-            // The prefab name must not contain a space. Valheim hashes prefabs through Utils.GetPrefabName,
-            // which truncates at the first '(' or ' ', so "Remove Terrain Modifications(Clone)" went over the
-            // wire as plain "Remove" and never matched anything ObjectDB knew about.
             AddToolPiece<RemoveModificationsOverlayVisualizer>("ocdheim_remove_terrain_modifications", "Remove Terrain Modifications", "mud_road_v2", "Hoe", OverlayVisualizer.remove);
         }
 
@@ -144,7 +133,7 @@ namespace OCDheim
 
             if (PrefabManager.Instance.GetPrefab(basePieceName) == null)
             {
-                global::OCDheim.Logger.Warn(() => $"Vanilla prefab '{basePieceName}' is gone, skipping tool piece '{displayName}'");
+                Log.Warn(() => $"Vanilla prefab '{basePieceName}' is gone, skipping tool piece '{displayName}'");
                 return;
             }
 
@@ -159,7 +148,7 @@ namespace OCDheim
             var terrainOp = piece.PiecePrefab.GetComponent<TerrainOp>();
             if (terrainOp == null)
             {
-                global::OCDheim.Logger.Warn(() => $"Prefab '{basePieceName}' carries no TerrainOp, skipping tool piece '{displayName}'");
+                Log.Warn(() => $"Prefab '{basePieceName}' carries no TerrainOp, skipping tool piece '{displayName}'");
                 return;
             }
 
@@ -191,11 +180,11 @@ namespace OCDheim
             var snakeSuffix = brickSuffix.Replace(" ", "_").Replace("(", "").Replace(")", "").ToLower();
             var brickExists = PieceManager.Instance.GetPiece(brickName);
             if (brickExists != null) { return; }
-            
+
             var brick = PrefabManager.Instance.CreateClonedPrefab($"stone_floor_{snakeSuffix}", "stone_floor_2x2");
             if (brick == null)
             {
-                global::OCDheim.Logger.Warn(() => $"Vanilla prefab 'stone_floor_2x2' is gone, skipping build piece '{brickName}'");
+                Log.Warn(() => $"Vanilla prefab 'stone_floor_2x2' is gone, skipping build piece '{brickName}'");
                 return;
             }
 
@@ -222,21 +211,20 @@ namespace OCDheim
             AddVisualizerTo<SeedGrassOverlayVisualizer>("replant_v2");
         }
 
-        // A renamed or removed vanilla prefab used to null-reference its way out of this callback and take
-        // every tool that came after it down with it. Each tool now stands or falls on its own.
+
         private static void AddVisualizerTo<TOverlayVisualizer>(string prefabName) where TOverlayVisualizer : OverlayVisualizer
         {
             var prefab = PrefabManager.Instance.GetPrefab(prefabName);
             if (prefab == null)
             {
-                global::OCDheim.Logger.Warn(() => $"Vanilla prefab '{prefabName}' is gone, skipping its {typeof(TOverlayVisualizer).Name}");
+                Log.Warn(() => $"Vanilla prefab '{prefabName}' is gone, skipping its {typeof(TOverlayVisualizer).Name}");
                 return;
             }
 
             if (prefab.GetComponent<TOverlayVisualizer>() != null) { return; }
 
             prefab.AddComponent<TOverlayVisualizer>();
-            global::OCDheim.Logger.Debug(() => $"Attached {typeof(TOverlayVisualizer).Name} to vanilla prefab '{prefabName}'");
+            Log.Debug(() => $"Attached {typeof(TOverlayVisualizer).Name} to vanilla prefab '{prefabName}'");
         }
     }
 }

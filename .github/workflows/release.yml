@@ -1,0 +1,41 @@
+name: Attach release package
+
+# The mod compiles against Valheim's own managed assemblies, which are not redistributable and are not
+# present on a hosted runner, so this workflow deliberately does not build. Build locally with
+# `dotnet build -c Release` - that produces OCDheim/OCDheim.zip - then run this workflow against a release
+# tag and upload that zip, and it is attached to the release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the package to (e.g. v0.3.0)
+        required: true
+      package:
+        description: Path to the locally built zip, relative to the repository root
+        required: false
+        default: OCDheim/OCDheim.zip
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Verify the package exists
+        run: |
+          if [ ! -f "${{ inputs.package }}" ]; then
+            echo "::error::${{ inputs.package }} not found. Build locally with 'dotnet build -c Release' and commit or upload the zip before running this workflow."
+            exit 1
+          fi
+          unzip -l "${{ inputs.package }}"
+
+      - name: Attach the package to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" "${{ inputs.package }}" --clobber

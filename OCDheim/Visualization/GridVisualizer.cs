@@ -67,28 +67,19 @@ namespace OCDheim
                 return;
             }
 
-            if (!InitializeGridRenderer() || !InitializePlayerMask())
-            {
-                enabled = false;
-            }
+            InitializeGridRenderer();
+            InitializePlayerMask();
         }
 
-        private bool InitializeGridRenderer()
+        private void InitializeGridRenderer()
         {
-            var gridMaterial = OCDheim.resourceBundle.LoadAsset<Material>("assets/worldgrid.mat");
-            if (gridMaterial == null)
-            {
-                Logger.Warn(() => "'assets/worldgrid.mat' is missing from the asset bundle, the World Grid overlay stays disabled.");
-                return false;
-            }
-
             var rendererGo = new GameObject();
             rendererGo.transform.rotation = Quaternion.Euler(90, 0, 0);
             renderer = rendererGo.AddComponent<Projector>();
             renderer.orthographicSize = GridBorderMaxRadius;
             renderer.orthographic = true;
-            
-            material = new Material(gridMaterial);
+
+            material = new Material(OCDheim.resourceBundle.LoadAsset<Material>("assets/worldgrid.mat"));
             material.SetColor(MinColor, new Color(0.25f, 0.25f, 0.25f, 0.25f));
             material.SetColor(MaxColor, new Color(0.45f, 0.45f, 0.45f, 0.45f));
             material.SetFloat(AAThickness, 0.02f);
@@ -96,25 +87,14 @@ namespace OCDheim
             material.SetFloat(BorderThickness, 0.15f);
             material.SetFloat(GridResolution, GridDensity());
             renderer.material = material;
-            
-            renderer.ignoreLayers = ~LayerMask.GetMask("terrain");
 
-            return true;
+            renderer.ignoreLayers = ~LayerMask.GetMask("terrain");
         }
 
-        private bool InitializePlayerMask()
+        private void InitializePlayerMask()
         {
-            var playerMaskMaterial = OCDheim.resourceBundle.LoadAsset<Material>("assets/playermask.mat");
-            if (playerMaskMaterial == null)
-            {
-                Logger.Warn(() => "'assets/playermask.mat' is missing from the asset bundle, the World Grid overlay stays disabled.");
-                return false;
-            }
-
-            playerMask = new Material(playerMaskMaterial);
+            playerMask = new Material(OCDheim.resourceBundle.LoadAsset<Material>("assets/playermask.mat"));
             Camera.main?.AddCommandBuffer(CameraEvent.BeforeForwardAlpha, cb);
-
-            return true;
         }
 
         private void Update()
@@ -127,7 +107,7 @@ namespace OCDheim
                 material.SetVector(PlayerPosition, new Vector4(playerPos.x, 0, playerPos.z, 0));
                 material.SetFloat(GridRadius, borderRadius);
             }
-            
+
             RefreshBuffer();
         }
 
@@ -145,7 +125,7 @@ namespace OCDheim
 
             return currentTimer;
         }
-        
+
         private void RefreshBuffer()
         {
             cb.Clear();
@@ -176,7 +156,7 @@ namespace OCDheim
             {
                 Destroy(material);
             }
-            
+
             if (playerMask != null)
             {
                 Destroy(playerMask);

@@ -17,23 +17,23 @@ namespace OCDheim
         private static readonly ButtonConfig GridModeJoy = new ButtonConfig { Name = "GridModeJoy", GamepadButton = InputManager.GamepadButton.RightStickButton };
         private static readonly ButtonConfig PrecisionModeKey = new ButtonConfig { Name = "PrecisionModeKey", Key = KeyCode.Z };
         private static readonly ButtonConfig PrecisionModeJoy = new ButtonConfig { Name = "PrecisionModeJoy", GamepadButton = InputManager.GamepadButton.ButtonWest };
-        
+
         private const string JoyScrollUnlock = "JoyLTrigger";
         private const string JoyScrollDown = "JoyDPadDown";
         private const string JoyScrollUp = "JoyDPadUp";
 
         private const float ScrollPrecision = 0.01f;
-        
-        // One physical keypress still arrived as two rising edges: ZInput.GetButton does not hold steady across
-        // frames for these buttons, so the held-state flickers and a single ALT toggled Grid Mode twice. Ignore
-        // a second key-driven toggle that lands within a fraction of a second of the last one - no human
-        // double-taps a mode key that fast, and the auto-disable path is deliberately left undebounced.
+
         private const float ToggleDebounceSeconds = 0.25f;
 
         private static bool gridKeyHeldLastFrame;
         private static bool precisionKeyHeldLastFrame;
         private static float lastGridToggleTime = float.NegativeInfinity;
         private static float lastPrecisionToggleTime = float.NegativeInfinity;
+
+        public static bool copyHeightPressed { get; private set; }
+
+        public static bool pasteModifierHeld => snapModeDisabled;
 
         private static bool _gridModeEnabled;
         private static bool _gridModeFreshlyEnabled;
@@ -69,10 +69,6 @@ namespace OCDheim
 
         private void Update()
         {
-            // ZInput.GetButtonDown reports the same press on more than one frame under Valheim's new Input
-            // System, so a single ALT toggled Grid Mode twice and left it exactly where it started - which
-            // made every Grid Mode feature downstream look broken. Track the held state and act on the
-            // rising edge ourselves.
             var gridHeld = ZInput.GetButton(GridModeKey.Name)
                            || (snapModeEnabled && ZInput.GetButton(GridModeJoy.Name));
             var gridModeButton = gridHeld && !gridKeyHeldLastFrame
@@ -102,6 +98,8 @@ namespace OCDheim
                 precisionMode = precisionMode == ORDINARY ? SUPERIOR : ORDINARY;
                 Logger.Info(() => $"[{(precisionMode == SUPERIOR ? "ENABLED" : "DISABLED")}] PRECISION MODE");
             }
+
+            copyHeightPressed = precisionModeButton && !togglePrecisionMode;
         }
 
         public static float ScrollΔ()
@@ -111,7 +109,7 @@ namespace OCDheim
             {
                 return scrollΔ > 0 ? ScrollPrecision : - ScrollPrecision;
             }
-            
+
             if (ZInput.GetButton(JoyScrollUnlock) && ZInput.GetButtonDown(JoyScrollDown))
             {
                 return - ScrollPrecision;

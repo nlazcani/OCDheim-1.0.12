@@ -51,8 +51,13 @@ Then this is the mod for you.
 	- The terrain modification AoE is applied uniformly over the affected tiles (doesn't dissolve closer to the border)
 	- The tile position (x, y, h) is overlayed over the terrain modification visualization for player convenience
 	- **Especially useful when:** leveling or cultivating ledges without spilling over slopes or corners
-- `MOUSE WHEEL SCROLL ↑ or ↓` [`LT` + `D-PAD ↑` or `LT` + `D-PAD ↓`] when `Raise Ground` is active to precisely fine-tune the intensity of the effect
+- `MOUSE WHEEL SCROLL ↑ or ↓` [`LT` + `D-PAD ↑` or `LT` + `D-PAD ↓`] when `Raise Ground` is active to precisely fine-tune the intensity of the effect (`-1.00` to `+1.00`, so it lowers ground as well as raises it)
 	- **Especially useful when:** the vicinity of your keep is TOO perfect and TOO even from the extensive use of `Level Ground` in GRID MODE 😉
+- `Z` copies the ground height under the cursor while `Raise Ground` is active, and `SHIFT` measures another spot against it
+	- The overlay reads `saved:` once a height is copied; holding `SHIFT` drops it to that height and shows the step that would get there, leaving the spinner untouched
+	- `SHIFT` + click brings that spot to the saved height in a single operation
+	- The copied height lasts for the session
+	- **Especially useful when:** matching a new terrace to one you levelled (but is too far away), without having to check the height again
 - All Build Pieces snap to the World Grid (as opposed to other Build Pieces)
 	- **Especially useful when:** laying down the foundation piece of your build so that the whole build resides on the World Grid
 - All Seeds snap to the World Grid
@@ -111,23 +116,6 @@ Well now they do:
 
 ## Known Issues
 https://github.com/java-devil/OCDheim/issues
-
-## Acknowledgments
-- My Wife.
-- My Wife once more.
-- Seriously Guys, my Wife. She screened my ideas. Helped test them. Helped with the GUI elements. Recorded the hilarious promotional video for you to enjoy. Provided me with back rubs and brain rubs... not to mention two kids and more love than I would possibly know what to with.
-- ...also the Valheim developers for providing us with this, dunno... MASTERPIECE OF A GAME
-- ...and the Jötunn developers for being more helpful than is permissible by law (seriously if you ever decide to mod Valheim - look up their Wiki and their Discord)
-
-## Feedback
-[![Discord](banners/discord.png)](https://discord.com/users/890153569905414144)
-[![GitHub](banners/github.png)](https://github.com/java-devil/OCDheim)
-[![Nexus Mods](banners/nexus.png)](https://www.nexusmods.com/valheim/mods/2087)
-
-## Donations
-If you enjoy my work please consider a second to donate 😉
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z8Z3GZVCJ)
 
 [^1]: Every Build Piece that is NOT snappable in Vanilla Valheim (think: a Torch, a Forge or a Forge Cooler) - corresponds to the `Misc` `Crafting` and `Furniture` Tabs<br>
 [^2]: Every Build Piece that is snappable in Vanilla Valheim (think: a Wood Floor, a Darkwood Pole or a Black Marble Column) - corresponds to the `Build` and `Heavy Building` Tabs<br>

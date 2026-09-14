@@ -58,7 +58,14 @@ namespace OCDheim
             Logger.Debug(() => "[SUCCESS] Smooth Terrain Modification");
         }
 
-        public static void RaiseTerrain(Vector3 worldPos, Heightmap hMap, TerrainComp compiler, float power, ref float[] levelΔ, ref float[] smoothΔ, ref bool[] modifiedHeight)
+        private static bool ShouldMoveTile(float Δh, float power, bool setExactly)
+        {
+            if (setExactly) { return Δh != 0; }
+
+            return power < 0 ? Δh <= 0 : Δh >= 0;
+        }
+
+        public static void RaiseTerrain(Vector3 worldPos, Heightmap hMap, TerrainComp compiler, float power, bool setExactly, ref float[] levelΔ, ref float[] smoothΔ, ref bool[] modifiedHeight)
         {
             Logger.Debug(() => "[INIT] Raise Terrain Modification");
 
@@ -75,7 +82,7 @@ namespace OCDheim
                     var tileIndex = y * PTilesPerChunk + x;
                     var tileH = hMap.GetHeight(x, y);
                     var Δh = referenceH - tileH;
-                    if (Δh >= 0)
+                    if (ShouldMoveTile(Δh, power, setExactly))
                     {
                         var oldLevelΔ = levelΔ[tileIndex];
                         var oldSmoothΔ = smoothΔ[tileIndex];
@@ -90,7 +97,7 @@ namespace OCDheim
                     }
                     else
                     {
-                        Logger.Debug(() => "Declined to process tile: Δh < 0!");
+                        Logger.Debug(() => "Declined to process tile: it already lies past the target");
                         Logger.Debug(() => $"tilePos: ({x}, {y}), tileH: {tileH}, Δh: {Δh}");
                     }
                 }
@@ -222,15 +229,15 @@ namespace OCDheim
                 return true;
             }
 
-            // Lowering keeps the vanilla area and only takes its step size from the spinner - the old
-            // sentinel-radius version never flagged a negative delta for the precise path either.
-            if (delta < 0)
-            {
-                delta = LowerGroundSpinner.value;
-                return true;
-            }
+            // Holding SHIFT over a saved height pastes it: the step is however far this spot falls short, so a
+            // single click lands exactly on it. That is the one case allowed past the spinner's own -1..1, and
+            // the one case that both raises and lowers, since "reach this height" has to work from either side.
+            var pasting = KeyBinder.pasteModifierHeld && HeightClipboard.hasSavedHeight;
+            var step = pasting
+                ? HeightClipboard.MissingTo(worldPos.y)
+                : RaiseGroundSpinner.value;
 
-            PreciseTerrainModifier.RaiseTerrain(worldPos, ___m_hmap, __instance, RaiseGroundSpinner.value, ref ___m_levelDelta, ref ___m_smoothDelta, ref ___m_modifiedHeight);
+            PreciseTerrainModifier.RaiseTerrain(worldPos, ___m_hmap, __instance, step, pasting, ref ___m_levelDelta, ref ___m_smoothDelta, ref ___m_modifiedHeight);
             return false;
         }
     }

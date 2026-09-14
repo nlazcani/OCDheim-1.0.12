@@ -6,8 +6,6 @@ using static OCDheim.PieceHelpers;
 
 namespace OCDheim
 {
-    // Drives the placement ghost's overlay every gameplay frame. See OverlayVisualizer.Tick for why the ghost's
-    // own Update cannot be relied on.
     [HarmonyPatch]
     public static class OverlayVisualizerTicker
     {
@@ -110,11 +108,6 @@ namespace OCDheim
 
         private void Update() => Tick();
 
-        // The placement ghost's own Update does not tick during normal gameplay - the overlays only moved when
-        // the pause menu was opened or closed, which froze the height readout and made the scroll wheel look
-        // dead. Player.UpdatePlacementGhost does run every gameplay frame, so it drives the refresh instead.
-        // Both entry points are kept and guarded so a frame is never processed twice, which would double every
-        // scroll step.
         public void Tick()
         {
             if (lastTickedFrame == Time.frameCount) { return; }

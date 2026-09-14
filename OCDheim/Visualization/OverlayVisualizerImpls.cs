@@ -45,19 +45,38 @@ namespace OCDheim
             VisualizeTerraformingBounds(tertiary);
         }
 
+        private float groundHeight => transform.position.y;
+
         protected override void OnRefresh()
         {
             base.OnRefresh();
             if (KeyBinder.gridModeEnabled)
             {
-                spinner.Refresh();
-                secondary.localPosition = new Vector3(0f, spinner.value, 0f);
+                if (KeyBinder.copyHeightPressed)
+                {
+                    HeightClipboard.Save(groundHeight);
+                }
 
-                hoverInfo.text = spinner.value > 0f
-                    ? $"h: {secondary.worldPosition.y+VanillaValheimOverlayBump:0.00}\n(+{secondary.localPosition.y:0.00})"
-                    : $"x: {secondary.worldPosition.x:0}, y: {secondary.worldPosition.z:0}\nh: {secondary.worldPosition.y+VanillaValheimOverlayBump:0.00}";
+                var previewingPaste = HeightClipboard.hasSavedHeight && KeyBinder.pasteModifierHeld;
+                if (!previewingPaste) { spinner.Refresh(); }
+
+                var offset = previewingPaste ? HeightClipboard.MissingTo(groundHeight) : spinner.value;
+                secondary.localPosition = new Vector3(0f, offset, 0f);
+
+                hoverInfo.text = BuildHoverText(offset);
             }
             tertiary.enabled = KeyBinder.gridModeEnabled;
+        }
+
+        private string BuildHoverText(float offset)
+        {
+            var target = secondary.worldPosition.y + VanillaValheimOverlayBump;
+            var pending = offset != 0f ? $" ({offset:+0.00;-0.00})" : string.Empty;
+            var text = $"x: {secondary.worldPosition.x:0}, y: {secondary.worldPosition.z:0}\nh: {target:0.00}{pending}";
+
+            if (!HeightClipboard.hasSavedHeight) { return text; }
+
+            return text + $"\nsaved: {HeightClipboard.savedHeight + VanillaValheimOverlayBump:0.00}";
         }
     }
 
