@@ -1,5 +1,16 @@
 # Changelog
 
+## Version 0.2.4
+
+### Fixes
+- Fix: Compatibility with Valheim 1.0.12 on Unity 6
+- Fix: A rejected asset bundle no longer takes the whole plugin down - everything except the World Grid overlay keeps working
+- Fix: A renamed or removed vanilla prefab now only disables its own tool instead of every tool registered after it
+
+### Improvements
+- Minor: Log level is configurable and defaults to `Info`; `Debug` used to be hardwired on and cost frames while building
+- Minor: Jotunn dependency raised to 2.30.0
+
 ## Version 0.2.3
 
 ### Improvements

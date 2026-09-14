@@ -8,15 +8,15 @@
     <ImplicitlyExpandNETStandardFacades>true</ImplicitlyExpandNETStandardFacades>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 
-    <BepInExPath>$(HOME)/.steam/steam/steamapps/common/Valheim/BepInEx/core</BepInExPath>
-    <PluginPath>$(HOME)/.steam/steam/steamapps/common/Valheim/BepInEx/plugins</PluginPath>
-    <ValheimData>$(HOME)/.steam/steam/steamapps/common/Valheim/Valheim_Data/Managed</ValheimData>
+    <BepInExPath>$(VALHEIM_INSTALL)/BepInEx/core</BepInExPath>
+    <PluginPath>$(MOD_DEPLOYPATH)/OCDheim</PluginPath>
+    <ValheimData>$(VALHEIM_INSTALL)/valheim_Data/Managed</ValheimData>
 
     <NoWarn>$(NoWarn);MSB3245</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="JotunnLib" Version="2.29.0" />
+    <PackageReference Include="JotunnLib" Version="2.30.0" />
     <ResourceFiles Include="Resources/**/*.*"/>
   </ItemGroup>
 
@@ -96,6 +96,7 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <MakeDir Directories="$(PluginPath)"/>
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(PluginPath)"/>
     <Copy SourceFiles="@(ResourceFiles)" DestinationFiles="@(ResourceFiles->'$(PluginPath)/%(RecursiveDir)%(Filename)%(Extension)')"/>
   </Target>

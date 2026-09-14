@@ -19,9 +19,39 @@ namespace OCDheim
     {
         public const string GUID = "dymek.dev.OCDheim";
         private const string Name = "OCDheim";
-        private const string Version = "0.2.3";
+        private const string Version = "0.2.4";
 
-        public static AssetBundle resourceBundle { get; } = LoadResourceBundle();
+        private static bool resourceBundleLoadAttempted;
+        private static AssetBundle resourceBundleBacking;
+
+        // The shader/material bundle is built by the Unity editor against an older engine than the one
+        // Valheim currently ships (Unity 6). A bundle the running engine refuses to read must not take
+        // the whole plugin down with it: every OCDheim feature except the World Grid overlay works fine
+        // without it, so resolve it lazily and hand back null on failure.
+        public static AssetBundle resourceBundle
+        {
+            get
+            {
+                if (resourceBundleLoadAttempted) { return resourceBundleBacking; }
+                resourceBundleLoadAttempted = true;
+
+                try
+                {
+                    resourceBundleBacking = LoadResourceBundle();
+                }
+                catch (Exception e)
+                {
+                    global::OCDheim.Logger.Warn(() => $"Could not load the OCDheim asset bundle, the World Grid overlay stays disabled: {e.Message}");
+                }
+
+                if (resourceBundleBacking == null)
+                {
+                    global::OCDheim.Logger.Warn(() => "OCDheim asset bundle is unavailable, the World Grid overlay stays disabled.");
+                }
+
+                return resourceBundleBacking;
+            }
+        }
         private Texture2D brick1x1 { get; } = LoadTextureFromDisk("brick_1x1.png");
         private Texture2D brick2x1 { get; } = LoadTextureFromDisk("brick_2x1.png");
         private Texture2D brick2x2 { get; } = LoadTextureFromDisk("brick_2x2.png");
@@ -60,11 +90,32 @@ namespace OCDheim
 
         private void Awake()
         {
-            harmony.PatchAll();
+            global::OCDheim.Logger.logLevel = Config.Bind("Logging", "LogLevel", BepInEx.Logging.LogLevel.Info,
+                "How chatty OCDheim is. Debug logs every piece the placement ghost evaluates and costs frames while building.").Value;
+
+            PatchEachFeatureSeparately();
             gameObject.AddComponent<KeyBinder>();
             PrefabManager.OnVanillaPrefabsAvailable += AddOCDheimToolPieces;
             PrefabManager.OnVanillaPrefabsAvailable += AddOCDheimBuildPieces;
             PrefabManager.OnVanillaPrefabsAvailable += ModVanillaValheimTools;
+        }
+
+        // Harmony.PatchAll() gives up on the first patch class that will not apply, so one vanilla method whose
+        // signature moved used to leave the entire mod unpatched. Patching class by class keeps the damage local:
+        // the feature whose hook no longer fits goes quiet, everything else still works.
+        private void PatchEachFeatureSeparately()
+        {
+            foreach (var type in AccessTools.GetTypesFromAssembly(typeof(OCDheim).Assembly))
+            {
+                try
+                {
+                    harmony.CreateClassProcessor(type).Patch();
+                }
+                catch (Exception e)
+                {
+                    global::OCDheim.Logger.Warn(() => $"Could not apply the patches of '{type.Name}', that feature stays disabled: {e.Message}");
+                }
+            }
         }
 
         [HarmonyPostfix]
@@ -87,7 +138,13 @@ namespace OCDheim
         {
             var pieceExists = PieceManager.Instance.GetPiece(pieceName);
             if (pieceExists != null) { return; }
-            
+
+            if (PrefabManager.Instance.GetPrefab(basePieceName) == null)
+            {
+                global::OCDheim.Logger.Warn(() => $"Vanilla prefab '{basePieceName}' is gone, skipping tool piece '{pieceName}'");
+                return;
+            }
+
             var pieceIcon = Sprite.Create(iconTexture, new Rect(0, 0, iconTexture.width, iconTexture.height), Vector2.zero);
             var piece = new CustomPiece(pieceName, basePieceName, new PieceConfig
             {
@@ -96,7 +153,14 @@ namespace OCDheim
                 PieceTable = pieceTable
             });
 
-            var settings = piece.PiecePrefab.GetComponent<TerrainOp>().m_settings;
+            var terrainOp = piece.PiecePrefab.GetComponent<TerrainOp>();
+            if (terrainOp == null)
+            {
+                global::OCDheim.Logger.Warn(() => $"Prefab '{basePieceName}' carries no TerrainOp, skipping tool piece '{pieceName}'");
+                return;
+            }
+
+            var settings = terrainOp.m_settings;
             settings.m_level = level;
             settings.m_raise = raise;
             settings.m_smooth = smooth;
@@ -125,6 +189,12 @@ namespace OCDheim
             if (brickExists != null) { return; }
             
             var brick = PrefabManager.Instance.CreateClonedPrefab($"stone_floor_{snakeSuffix}", "stone_floor_2x2");
+            if (brick == null)
+            {
+                global::OCDheim.Logger.Warn(() => $"Vanilla prefab 'stone_floor_2x2' is gone, skipping build piece '{brickName}'");
+                return;
+            }
+
             var brickIcon = Sprite.Create(iconTexture, new Rect(0, 0, iconTexture.width, iconTexture.height), Vector2.zero);
             brick.transform.localScale = brickScale;
 
@@ -140,12 +210,28 @@ namespace OCDheim
 
         private void ModVanillaValheimTools()
         {
-            PrefabManager.Instance.GetPrefab("mud_road_v2").AddComponent<LevelGroundOverlayVisualizer>();
-            PrefabManager.Instance.GetPrefab("raise_v2").AddComponent<RaiseGroundOverlayVisualizer>();
-            PrefabManager.Instance.GetPrefab("path_v2").AddComponent<PaveRoadOverlayVisualizer>();
-            PrefabManager.Instance.GetPrefab("paved_road_v2").AddComponent<PaveRoadOverlayVisualizer>();
-            PrefabManager.Instance.GetPrefab("cultivate_v2").AddComponent<CultivateOverlayVisualizer>();
-            PrefabManager.Instance.GetPrefab("replant_v2").AddComponent<SeedGrassOverlayVisualizer>();
+            AddVisualizerTo<LevelGroundOverlayVisualizer>("mud_road_v2");
+            AddVisualizerTo<RaiseGroundOverlayVisualizer>("raise_v2");
+            AddVisualizerTo<PaveRoadOverlayVisualizer>("path_v2");
+            AddVisualizerTo<PaveRoadOverlayVisualizer>("paved_road_v2");
+            AddVisualizerTo<CultivateOverlayVisualizer>("cultivate_v2");
+            AddVisualizerTo<SeedGrassOverlayVisualizer>("replant_v2");
+        }
+
+        // A renamed or removed vanilla prefab used to null-reference its way out of this callback and take
+        // every tool that came after it down with it. Each tool now stands or falls on its own.
+        private static void AddVisualizerTo<TOverlayVisualizer>(string prefabName) where TOverlayVisualizer : OverlayVisualizer
+        {
+            var prefab = PrefabManager.Instance.GetPrefab(prefabName);
+            if (prefab == null)
+            {
+                global::OCDheim.Logger.Warn(() => $"Vanilla prefab '{prefabName}' is gone, skipping its {typeof(TOverlayVisualizer).Name}");
+                return;
+            }
+
+            if (prefab.GetComponent<TOverlayVisualizer>() != null) { return; }
+
+            prefab.AddComponent<TOverlayVisualizer>();
         }
     }
 }

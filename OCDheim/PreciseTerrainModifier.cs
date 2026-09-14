@@ -233,11 +233,14 @@ namespace OCDheim
         [HarmonyPrefix]
         [HarmonyPatch(typeof(TerrainComp))]
         [HarmonyPatch(nameof(TerrainComp.PaintCleared))]
-        private static bool Prefix(Vector3 worldPos, float radius, PaintType paintType, bool heightCheck, bool apply, Heightmap ___m_hmap, ref Color[] ___m_paintMask, ref bool[] ___m_modifiedPaint)
+        // Valheim folded PaintCleared's loose arguments into the shared TerrainOp.Settings object:
+        // PaintCleared(worldPos, radius, paintType, heightCheck, apply) is now PaintCleared(worldPos, rot, settings).
+        // The radius and the paint type come out of the settings instead, the grid-mode signal rides along unchanged.
+        private static bool Prefix(Vector3 worldPos, TerrainOp.Settings settings, Heightmap ___m_hmap, ref Color[] ___m_paintMask, ref bool[] ___m_modifiedPaint)
         {
-            if (ClientSideGridModeOverride.IsGridModeEnabled(radius))
+            if (ClientSideGridModeOverride.IsGridModeEnabled(settings.m_paintRadius))
             {
-                PreciseTerrainModifier.RecolorTerrain(worldPos, paintType, ___m_hmap, ref ___m_paintMask, ref ___m_modifiedPaint);
+                PreciseTerrainModifier.RecolorTerrain(worldPos, settings.m_paintType, ___m_hmap, ref ___m_paintMask, ref ___m_modifiedPaint);
                 return false;
             }
 
